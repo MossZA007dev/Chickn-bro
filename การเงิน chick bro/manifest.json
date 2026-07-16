@@ -1,0 +1,18 @@
+{
+  "name": "Chick'n Bro — เงินในร้าน",
+  "short_name": "Chick'n Bro",
+  "description": "ไก่ทอดเพื่อนซี้ กินเมื่อไหร่ก็ฟิน",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#FFF9F0",
+  "theme_color": "#FF9800",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
