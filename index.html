@@ -365,7 +365,10 @@ hr.sep{border:none;border-top:1px dashed var(--line);margin:14px 0}
     <h3><span id="sheetTitle">แก้ไขรายการ</span><button onclick="closeSheet()">×</button></h3>
     <div class="field"><label>วันที่ &amp; เวลา</label><input type="datetime-local" id="eDate"></div>
     <div class="field"><label>ยอดเงินเข้า (฿)</label><input type="number" id="eAmount" inputmode="decimal" step="any"></div>
-    <div class="field"><label>หักเป็นเงินฉัน (%)</label><input type="number" id="ePct" inputmode="decimal" step="0.1" min="0" max="100"></div>
+    <div class="row">
+      <div class="field"><label>หักเป็นเงินฉัน (%)</label><input type="number" id="ePct" inputmode="decimal" step="0.1" min="0" max="100" placeholder="เช่น 10"></div>
+      <div class="field"><label>หรือกรอกยอดเงินฉันเอง (฿) <span class="muted">— ทับ %</span></label><input type="number" id="eMe" inputmode="decimal" step="any" placeholder="0"></div>
+    </div>
     <div class="field"><label>หมายเหตุ</label><textarea id="eNote" rows="2"></textarea></div>
     <button class="btn green" onclick="saveEdit()">บันทึกการแก้ไข</button>
     <button class="btn red sm" id="delBtn" style="margin-top:10px" onclick="deleteEdit()">ลบรายการนี้</button>
@@ -518,6 +521,7 @@ function editLog(id){const r=load().find(l=>l.id===id);if(!r)return;
   document.getElementById('eDate').value=toLocalDT(r.ts);
   document.getElementById('eAmount').value=r.amount;
   document.getElementById('ePct').value=r.pct;
+  document.getElementById('eMe').value=r.me||'';
   document.getElementById('eNote').value=r.note||'';
   document.getElementById('sheet').classList.add('show');
 }
@@ -529,6 +533,7 @@ function openManual(){
   document.getElementById('eDate').value=d.toISOString().slice(0,16);
   document.getElementById('eAmount').value='';
   document.getElementById('ePct').value=loadPct();
+  document.getElementById('eMe').value='';
   document.getElementById('eNote').value='';
   document.getElementById('sheet').classList.add('show');
 }
@@ -539,9 +544,10 @@ function saveEdit(){
   const amt=parseFloat(document.getElementById('eAmount').value)||0;
   if(amt<=0){toast('กรอกยอดเงิน');return}
   const pct=parseFloat(document.getElementById('ePct').value)||0;
-  const note=document.getElementById('eNote').value.trim();
-  const me=amt*pct/100;
+  const meOverride=parseFloat(document.getElementById('eMe').value);
+  const me=(meOverride!==undefined&&!isNaN(meOverride))?meOverride:amt*pct/100;
   const mom=amt-me;
+  const note=document.getElementById('eNote').value.trim();
   if(editingId){
     const logs=load();const i=logs.findIndex(l=>l.id===editingId);
     if(i>-1){logs[i]={...logs[i],ts,amount:amt,pct,me,mom,note};save(logs);}
