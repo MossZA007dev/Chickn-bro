@@ -435,6 +435,9 @@ hr.sep{border:none;border-top:1px dashed var(--line);margin:14px 0}
             <tbody id="daysBody"></tbody>
           </table>
         </div>
+        <div style="margin-top:14px;text-align:center">
+          <button class="btn ghost sm red" style="border-color:#FFCDD2;font-size:11px;padding:6px 12px" onclick="clearMonthData()">🗑 ล้างข้อมูลเดือนนี้</button>
+        </div>
       </div>
     </section>
   </main>
@@ -816,6 +819,19 @@ function updateDay(key,shop,value){
   daily[key][shop]=parseFloat(value)||0;
   saveDailyStore(daily);
   updateSavingsSummary();
+}
+function clearMonthData(){
+  const mk=viewMonthKey();
+  const viewDate=new Date(viewYear,viewMonth,1);
+  const monthName=viewDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+  if(!confirm(`ต้องการล้างข้อมูลการเก็บเงินเดือน ${monthName} ทั้งหมด?`))return;
+  if(!confirm(`ยืนยันอีกครั้ง: ล้างข้อมูลเดือน ${monthName} จริงหรือไม่? (ไม่สามารถกู้คืนได้)`))return;
+  const daily=loadDaily();
+  const keysToDelete=Object.keys(daily).filter(k=>k.startsWith(mk));
+  keysToDelete.forEach(k=>delete daily[k]);
+  saveDailyStore(daily);
+  renderSavings();
+  toast('ล้างข้อมูลเดือนนี้แล้ว ✅');
 }
 
 /* ===== Export ===== */
