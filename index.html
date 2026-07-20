@@ -677,6 +677,7 @@ function changeBillMonth(delta){
   viewBillMonth+=delta;
   if(viewBillMonth>11){viewBillMonth=0;viewBillYear++}
   if(viewBillMonth<0){viewBillMonth=11;viewBillYear--}
+  viewYear=viewBillYear;viewMonth=viewBillMonth;
   loadBillsForm();
 }
 
@@ -697,16 +698,19 @@ function renderBillsResult(){
   const b=loadBills();
   const div=document.getElementById('billResult');
   if(!b.total){div.style.display='none';return}
+  const daysInMonth=new Date(viewBillYear,viewBillMonth+1,0).getDate();
   div.style.display='block';
-  div.innerHTML=`<div class="sub">รวมบิลเดือนนี้</div><div class="big">${baht(b.total)}</div><div class="sub">÷ 30 วัน = เก็บวันละ <b>${baht(b.daily)}</b></div>`;
+  div.innerHTML=`<div class="sub">รวมบิลเดือนนี้</div><div class="big">${baht(b.total)}</div><div class="sub">÷ ${daysInMonth} วัน = เก็บวันละ <b>${baht(b.total/daysInMonth)}</b></div>`;
 }
 function saveBills(){
   const electric=parseFloat(document.getElementById('billElectric').value)||0;
   const water=parseFloat(document.getElementById('billWater').value)||0;
   const common=parseFloat(document.getElementById('billCommon').value)||0;
   const total=electric+water+common;
-  const daily=total/30;
-  saveBillsStore({electric,water,common,total,daily});
+  const daysInMonth=new Date(viewBillYear,viewBillMonth+1,0).getDate();
+  const daily=total/daysInMonth;
+  saveBillsStore({electric,water,common,total,daily,daysInMonth});
+  viewYear=viewBillYear;viewMonth=viewBillMonth;
   renderBillsResult();
   renderSavings();
   toast('บันทึกบิลแล้ว ✅');
@@ -731,6 +735,7 @@ function changeMonth(delta){
   viewMonth+=delta;
   if(viewMonth>11){viewMonth=0;viewYear++}
   if(viewMonth<0){viewMonth=11;viewYear--}
+  viewBillYear=viewYear;viewBillMonth=viewMonth;
   renderSavings();
 }
 function renderSavings(){
