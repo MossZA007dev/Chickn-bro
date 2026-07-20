@@ -430,7 +430,7 @@ hr.sep{border:none;border-top:1px dashed var(--line);margin:14px 0}
         <div class="dayscroll">
           <table>
             <thead><tr>
-              <th>วันที่</th><th>🐔 ร้านไก่</th><th>🍧 อาซาอิ</th><th>รวม</th><th>เป้าสะสม</th><th>สถานะ</th>
+              <th>วันที่</th><th>🐔 ร้านไก่</th><th>🍧 อาซาอิ</th><th>รวม</th><th>เป้า/วัน</th><th>สถานะ</th>
             </tr></thead>
             <tbody id="daysBody"></tbody>
           </table>
@@ -779,7 +779,7 @@ function updateSavingsSummary(){
   const daily=loadDaily();
   const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
   const dailyTarget=b.daily||(t.chicken+t.acai)||0;
-  let totalSaved=0, totalTarget=0, cumSaved=0, cumTarget=0;
+  let totalSaved=0, cumSaved=0;
   const rows=document.querySelectorAll('#daysBody tr');
   rows.forEach(row=>{
     const d=parseInt(row.dataset.day);
@@ -787,19 +787,19 @@ function updateSavingsSummary(){
     const entry=daily[key]||{chicken:0,acai:0};
     const dayTotal=(entry.chicken||0)+(entry.acai||0);
     cumSaved+=dayTotal;
-    cumTarget+=dailyTarget;
     totalSaved+=dayTotal;
-    totalTarget+=dailyTarget;
-    const diff=cumSaved-cumTarget;
+    const expectedTarget=dailyTarget*d;
+    const diff=cumSaved-expectedTarget;
     const statusCls=diff>=0?'status-ok':'status-bad';
     const statusText=diff>=0?`+${baht(diff)}`:baht(diff);
     const cumTargetCell=row.querySelector('.day-cumtarget');
     const statusCell=row.querySelector('.day-status');
     const totalCell=row.querySelector('.day-total');
-    if(cumTargetCell)cumTargetCell.textContent=baht(cumTarget);
+    if(cumTargetCell)cumTargetCell.textContent=baht(dailyTarget);
     if(statusCell){statusCell.textContent=statusText;statusCell.className='day-status '+statusCls}
     if(totalCell)totalCell.textContent=baht(dayTotal);
   });
+  const totalTarget=dailyTarget*daysInMonth;
   document.getElementById('svSaved').textContent=baht(totalSaved);
   document.getElementById('svTarget').textContent=baht(totalTarget);
   const diff=totalSaved-totalTarget;
