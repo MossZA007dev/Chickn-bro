@@ -405,7 +405,11 @@ hr.sep{border:none;border-top:1px dashed var(--line);margin:14px 0}
     <!-- ========== เก็บเงิน ========== -->
     <section class="tabview" data-tab="save">
       <div class="section">
-        <h2><span class="num">📅</span>เก็บเงินรายวัน — <span id="saveMonthLabel"></span></h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <button class="btn ghost sm" style="width:auto;padding:8px 14px" onclick="changeMonth(-1)">← เดือนก่อน</button>
+          <h2 style="margin:0;font-size:16px" id="saveMonthLabel"></h2>
+          <button class="btn ghost sm" style="width:auto;padding:8px 14px" onclick="changeMonth(1)">เดือนถัดไป →</button>
+        </div>
 
         <div class="summarybar">
           <div class="b g"><div class="t">เก็บแล้ว</div><div class="v" id="svSaved">฿0</div></div>
@@ -414,6 +418,7 @@ hr.sep{border:none;border-top:1px dashed var(--line);margin:14px 0}
         </div>
         <div class="progress2"><i id="svBar" style="width:0%;background:var(--orange-d)"></i></div>
         <p class="small" id="svHint" style="text-align:center"></p>
+        <p class="small muted" style="text-align:center" id="svDailyInfo"></p>
 
         <div class="dayscroll">
           <table>
@@ -639,6 +644,8 @@ function deleteEdit(){if(editingId&&confirm('ลบรายการนี้?'
 
 /* ===== Bills & Savings ===== */
 const BKEY='cb_bills_v2', TKEY='cb_targets_v2', DKEY='cb_daily_v2';
+let viewYear=new Date().getFullYear(), viewMonth=new Date().getMonth();
+
 function loadBills(){try{return JSON.parse(localStorage.getItem(BKEY))||{}}catch(e){return{}}}
 function saveBillsStore(b){localStorage.setItem(BKEY,JSON.stringify(b))}
 function loadTargets(){try{return JSON.parse(localStorage.getItem(TKEY))||{chicken:0,acai:0}}catch(e){return{chicken:0,acai:0}}}
@@ -688,17 +695,27 @@ function saveTargets(){
   toast('บันทึกยอดเก็บต่อร้านแล้ว ✅');
 }
 
+function changeMonth(delta){
+  viewMonth+=delta;
+  if(viewMonth>11){viewMonth=0;viewYear++}
+  if(viewMonth<0){viewMonth=11;viewYear--}
+  renderSavings();
+}
 function renderSavings(){
   const t=loadTargets();
+  const b=loadBills();
   const daily=loadDaily();
+  const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
   const now=new Date();
-  const year=now.getFullYear(), month=now.getMonth();
-  const daysInMonth=new Date(year,month+1,0).getDate();
-  const today=now.getDate();
-  const mk=`${year}-${String(month+1).padStart(2,'0')}`;
-  document.getElementById('saveMonthLabel').textContent=now.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+  const isCurrentMonth=viewYear===now.getFullYear()&&viewMonth===now.getMonth();
+  const today=isCurrentMonth?now.getDate():-1;
+  const mk=`${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
+  const viewDate=new Date(viewYear,viewMonth,1);
+  document.getElementById('saveMonthLabel').textContent=viewDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
 
-  const dailyTarget=t.chicken+t.acai;
+  const dailyTarget=t.chicken+t.acai||b.daily||0;
+  document.getElementById('svDailyInfo').textContent=dailyTarget?`เป้าเก็บวันละ ${baht(dailyTarget)} (ไก่ ${baht(t.chicken)} + อาซาอิ ${baht(t.acai)})`:'ยังไม่ได้ตั้งบิลหรือยอดต่อร้าน';
+
   let totalSaved=0, totalTarget=0, cumSaved=0, cumTarget=0;
   let rows='';
   for(let d=1;d<=daysInMonth;d++){
@@ -711,7 +728,7 @@ function renderSavings(){
     totalTarget+=dailyTarget;
     const diff=cumSaved-cumTarget;
     const isToday=d===today;
-    const isPast=d<today;
+    const isPast=isCurrentMonth&&d<today;
     const cls=isToday?'today':isPast?'past':'';
     const statusCls=diff>=0?'status-ok':'status-bad';
     const statusText=diff>=0?`+${baht(diff)}`:baht(diff);
