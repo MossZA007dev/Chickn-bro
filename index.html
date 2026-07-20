@@ -788,8 +788,7 @@ function updateSavingsSummary(){
     const dayTotal=(entry.chicken||0)+(entry.acai||0);
     cumSaved+=dayTotal;
     totalSaved+=dayTotal;
-    const expectedTarget=dailyTarget*d;
-    const diff=cumSaved-expectedTarget;
+    const diff=dayTotal-dailyTarget;
     const statusCls=diff>=0?'status-ok':'status-bad';
     const statusText=diff>=0?`+${baht(diff)}`:baht(diff);
     const cumTargetCell=row.querySelector('.day-cumtarget');
