@@ -381,23 +381,30 @@ hr.sep{border:none;border-top:1px dashed var(--line);margin:14px 0}
     <!-- ========== บิล ========== -->
     <section class="tabview" data-tab="bills">
       <div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <button class="btn ghost sm" style="width:auto;padding:8px 14px" onclick="changeBillMonth(-1)">← เดือนก่อน</button>
+          <h2 style="margin:0;font-size:16px" id="billMonthLabel"></h2>
+          <button class="btn ghost sm" style="width:auto;padding:8px 14px" onclick="changeBillMonth(1)">เดือนถัดไป →</button>
+        </div>
+
         <h2><span class="num">🧾</span>ค่าบิลประจำเดือน</h2>
         <div class="billgrid">
           <div class="field"><label>ค่าไฟ</label><input type="number" id="billElectric" inputmode="decimal" placeholder="0"></div>
           <div class="field"><label>ค่าน้ำ</label><input type="number" id="billWater" inputmode="decimal" placeholder="0"></div>
           <div class="field full"><label>ค่าส่วนกลาง / อื่นๆ</label><input type="number" id="billCommon" inputmode="decimal" placeholder="0"></div>
         </div>
-        <button class="btn green" onclick="saveBills()">คำนวณยอดเก็บต่อวัน</button>
+        <button class="btn green" onclick="saveBills()">💾 บันทึกบิล</button>
         <div class="billresult" id="billResult" style="display:none;margin-top:14px"></div>
       </div>
 
       <div class="section">
-        <h2><span class="num">🎯</span>ตั้งยอดเก็บต่อร้าน (ต่อวัน)</h2>
+        <h2><span class="num">🎯</span>แบ่งยอดเก็บต่อร้าน (ต่อวัน)</h2>
+        <p class="small muted" style="margin-bottom:10px">ยอดรวมควรเท่ากับยอดเก็บต่อวันจากบิลด้านบน</p>
         <div class="shoprow">
-          <div class="field"><label>🐔 ร้านไก่ (฿/วัน)</label><input type="number" id="targetChicken" inputmode="decimal" placeholder="เช่น 100"></div>
-          <div class="field"><label>🍧 ร้านอาซาอิ (฿/วัน)</label><input type="number" id="targetAcai" inputmode="decimal" placeholder="เช่น 116"></div>
+          <div class="field"><label>🐔 ร้านไก่ (฿/วัน)</label><input type="number" id="targetChicken" inputmode="decimal" placeholder="0"></div>
+          <div class="field"><label>🍧 ร้านอาซาอิ (฿/วัน)</label><input type="number" id="targetAcai" inputmode="decimal" placeholder="0"></div>
         </div>
-        <button class="btn" onclick="saveTargets()">บันทึกยอดเก็บต่อร้าน</button>
+        <button class="btn" onclick="saveTargets()">💾 บันทึกยอดต่อร้าน</button>
         <div id="targetSummary" class="small muted" style="text-align:center;margin-top:10px"></div>
       </div>
     </section>
@@ -482,7 +489,7 @@ function go(tab){
   if(tab==='home')renderHome();
   if(tab==='log')renderLog();
   if(tab==='add')initQuickForm();
-  if(tab==='bills'){loadBillsForm();renderBillsResult()}
+  if(tab==='bills'){loadBillsForm()}
   if(tab==='save')renderSavings();
 }
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
@@ -643,17 +650,39 @@ function saveEdit(){
 function deleteEdit(){if(editingId&&confirm('ลบรายการนี้?')){save(load().filter(l=>l.id!==editingId));closeSheet();renderLog();renderHome();toast('ลบแล้ว')}}
 
 /* ===== Bills & Savings ===== */
-const BKEY='cb_bills_v2', TKEY='cb_targets_v2', DKEY='cb_daily_v2';
+const BKEY='cb_bills_v3', TKEY='cb_targets_v3', DKEY='cb_daily_v2';
 let viewYear=new Date().getFullYear(), viewMonth=new Date().getMonth();
+let viewBillYear=new Date().getFullYear(), viewBillMonth=new Date().getMonth();
 
-function loadBills(){try{return JSON.parse(localStorage.getItem(BKEY))||{}}catch(e){return{}}}
-function saveBillsStore(b){localStorage.setItem(BKEY,JSON.stringify(b))}
-function loadTargets(){try{return JSON.parse(localStorage.getItem(TKEY))||{chicken:0,acai:0}}catch(e){return{chicken:0,acai:0}}}
-function saveTargetsStore(t){localStorage.setItem(TKEY,JSON.stringify(t))}
+function billMonthKey(){return `${viewBillYear}-${String(viewBillMonth+1).padStart(2,'0')}`}
+function viewMonthKey(){return `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`}
+
+function loadBillsAll(){try{return JSON.parse(localStorage.getItem(BKEY))||{}}catch(e){return{}}}
+function saveBillsAll(b){localStorage.setItem(BKEY,JSON.stringify(b))}
+function loadBills(){const all=loadBillsAll();return all[billMonthKey()]||{}}
+function saveBillsStore(b){const all=loadBillsAll();all[billMonthKey()]=b;saveBillsAll(all)}
+
+function loadTargetsAll(){try{return JSON.parse(localStorage.getItem(TKEY))||{}}catch(e){return{}}}
+function saveTargetsAll(t){localStorage.setItem(TKEY,JSON.stringify(t))}
+function loadTargets(){const all=loadTargetsAll();return all[billMonthKey()]||{chicken:0,acai:0}}
+function saveTargetsStore(t){const all=loadTargetsAll();all[billMonthKey()]=t;saveTargetsAll(all)}
+
+function loadTargetsForMonth(mk){const all=loadTargetsAll();return all[mk]||{chicken:0,acai:0}}
+function loadBillsForMonth(mk){const all=loadBillsAll();return all[mk]||{}}
+
 function loadDaily(){try{return JSON.parse(localStorage.getItem(DKEY))||{}}catch(e){return{}}}
 function saveDailyStore(d){localStorage.setItem(DKEY,JSON.stringify(d))}
 
+function changeBillMonth(delta){
+  viewBillMonth+=delta;
+  if(viewBillMonth>11){viewBillMonth=0;viewBillYear++}
+  if(viewBillMonth<0){viewBillMonth=11;viewBillYear--}
+  loadBillsForm();
+}
+
 function loadBillsForm(){
+  const viewDate=new Date(viewBillYear,viewBillMonth,1);
+  document.getElementById('billMonthLabel').textContent=viewDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
   const b=loadBills();
   document.getElementById('billElectric').value=b.electric||'';
   document.getElementById('billWater').value=b.water||'';
@@ -661,6 +690,7 @@ function loadBillsForm(){
   const t=loadTargets();
   document.getElementById('targetChicken').value=t.chicken||'';
   document.getElementById('targetAcai').value=t.acai||'';
+  renderBillsResult();
   renderTargetSummary();
 }
 function renderBillsResult(){
@@ -704,14 +734,14 @@ function changeMonth(delta){
   renderSavings();
 }
 function renderSavings(){
-  const t=loadTargets();
-  const b=loadBills();
+  const mk=viewMonthKey();
+  const t=loadTargetsForMonth(mk);
+  const b=loadBillsForMonth(mk);
   const daily=loadDaily();
   const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
   const now=new Date();
   const isCurrentMonth=viewYear===now.getFullYear()&&viewMonth===now.getMonth();
   const today=isCurrentMonth?now.getDate():-1;
-  const mk=`${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
   const viewDate=new Date(viewYear,viewMonth,1);
   document.getElementById('saveMonthLabel').textContent=viewDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
 
@@ -738,11 +768,11 @@ function renderSavings(){
   updateSavingsSummary();
 }
 function updateSavingsSummary(){
-  const t=loadTargets();
-  const b=loadBills();
+  const mk=viewMonthKey();
+  const t=loadTargetsForMonth(mk);
+  const b=loadBillsForMonth(mk);
   const daily=loadDaily();
   const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
-  const mk=`${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
   const dailyTarget=t.chicken+t.acai||b.daily||0;
   let totalSaved=0, totalTarget=0, cumSaved=0, cumTarget=0;
   const rows=document.querySelectorAll('#daysBody tr');
