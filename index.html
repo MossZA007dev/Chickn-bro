@@ -678,6 +678,7 @@ function saveBills(){
   const daily=total/30;
   saveBillsStore({electric,water,common,total,daily});
   renderBillsResult();
+  renderSavings();
   toast('บันทึกบิลแล้ว ✅');
 }
 function renderTargetSummary(){
@@ -692,6 +693,7 @@ function saveTargets(){
   const acai=parseFloat(document.getElementById('targetAcai').value)||0;
   saveTargetsStore({chicken,acai});
   renderTargetSummary();
+  renderSavings();
   toast('บันทึกยอดเก็บต่อร้านแล้ว ✅');
 }
 
@@ -716,32 +718,53 @@ function renderSavings(){
   const dailyTarget=t.chicken+t.acai||b.daily||0;
   document.getElementById('svDailyInfo').textContent=dailyTarget?`เป้าเก็บวันละ ${baht(dailyTarget)} (ไก่ ${baht(t.chicken)} + อาซาอิ ${baht(t.acai)})`:'ยังไม่ได้ตั้งบิลหรือยอดต่อร้าน';
 
-  let totalSaved=0, totalTarget=0, cumSaved=0, cumTarget=0;
   let rows='';
   for(let d=1;d<=daysInMonth;d++){
     const key=`${mk}-${String(d).padStart(2,'0')}`;
     const entry=daily[key]||{chicken:0,acai:0};
-    const dayTotal=entry.chicken+entry.acai;
+    const isToday=d===today;
+    const isPast=isCurrentMonth&&d<today;
+    const cls=isToday?'today':isPast?'past':'';
+    rows+=`<tr class="${cls}" data-day="${d}" data-key="${key}">
+      <td style="font-weight:700">${d}${isToday?' <span class="pill" style="font-size:9px">วันนี้</span>':''}</td>
+      <td><input type="number" inputmode="decimal" value="${entry.chicken||''}" onblur="updateDay('${key}','chicken',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="0"></td>
+      <td><input type="number" inputmode="decimal" value="${entry.acai||''}" onblur="updateDay('${key}','acai',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="0"></td>
+      <td class="day-total" style="font-weight:700">${baht((entry.chicken||0)+(entry.acai||0))}</td>
+      <td class="day-cumtarget"></td>
+      <td class="day-status"></td>
+    </tr>`;
+  }
+  document.getElementById('daysBody').innerHTML=rows;
+  updateSavingsSummary();
+}
+function updateSavingsSummary(){
+  const t=loadTargets();
+  const b=loadBills();
+  const daily=loadDaily();
+  const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
+  const mk=`${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
+  const dailyTarget=t.chicken+t.acai||b.daily||0;
+  let totalSaved=0, totalTarget=0, cumSaved=0, cumTarget=0;
+  const rows=document.querySelectorAll('#daysBody tr');
+  rows.forEach(row=>{
+    const d=parseInt(row.dataset.day);
+    const key=row.dataset.key;
+    const entry=daily[key]||{chicken:0,acai:0};
+    const dayTotal=(entry.chicken||0)+(entry.acai||0);
     cumSaved+=dayTotal;
     cumTarget+=dailyTarget;
     totalSaved+=dayTotal;
     totalTarget+=dailyTarget;
     const diff=cumSaved-cumTarget;
-    const isToday=d===today;
-    const isPast=isCurrentMonth&&d<today;
-    const cls=isToday?'today':isPast?'past':'';
     const statusCls=diff>=0?'status-ok':'status-bad';
     const statusText=diff>=0?`+${baht(diff)}`:baht(diff);
-    rows+=`<tr class="${cls}">
-      <td style="font-weight:700">${d}${isToday?' <span class="pill" style="font-size:9px">วันนี้</span>':''}</td>
-      <td><input type="number" inputmode="decimal" value="${entry.chicken||''}" onchange="updateDay('${key}','chicken',this.value)" placeholder="0"></td>
-      <td><input type="number" inputmode="decimal" value="${entry.acai||''}" onchange="updateDay('${key}','acai',this.value)" placeholder="0"></td>
-      <td style="font-weight:700">${baht(dayTotal)}</td>
-      <td>${baht(cumTarget)}</td>
-      <td class="${statusCls}">${statusText}</td>
-    </tr>`;
-  }
-  document.getElementById('daysBody').innerHTML=rows;
+    const cumTargetCell=row.querySelector('.day-cumtarget');
+    const statusCell=row.querySelector('.day-status');
+    const totalCell=row.querySelector('.day-total');
+    if(cumTargetCell)cumTargetCell.textContent=baht(cumTarget);
+    if(statusCell){statusCell.textContent=statusText;statusCell.className='day-status '+statusCls}
+    if(totalCell)totalCell.textContent=baht(dayTotal);
+  });
   document.getElementById('svSaved').textContent=baht(totalSaved);
   document.getElementById('svTarget').textContent=baht(totalTarget);
   const diff=totalSaved-totalTarget;
@@ -758,7 +781,7 @@ function updateDay(key,shop,value){
   if(!daily[key])daily[key]={chicken:0,acai:0};
   daily[key][shop]=parseFloat(value)||0;
   saveDailyStore(daily);
-  renderSavings();
+  updateSavingsSummary();
 }
 
 /* ===== Export ===== */
