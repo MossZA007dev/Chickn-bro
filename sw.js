@@ -1,4 +1,4 @@
-const CACHE='chicknbro-v2';
+const CACHE='chicknbro-v3';
 const ASSETS=[
   './manifest.json',
   './icon.svg'

@@ -447,8 +447,10 @@ tr.paid-day td:first-child{border-left:4px solid var(--green)}
             <tbody id="daysBody"></tbody>
           </table>
         </div>
-        <div style="margin-top:14px;text-align:center">
-          <button class="btn ghost sm red" style="border-color:#FFCDD2;font-size:11px;padding:6px 12px" onclick="clearMonthData()">🗑 ล้างข้อมูลเดือนนี้</button>
+        <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button class="btn ghost sm" style="width:auto" onclick="exportSavingsCSV()">⬇ CSV เดือนนี้</button>
+          <button class="btn ghost sm" style="width:auto" onclick="exportPDF()">⬇ PDF เดือนนี้</button>
+          <button class="btn ghost sm red" style="width:auto;border-color:#FFCDD2;font-size:11px;padding:6px 12px" onclick="clearMonthData()">🗑 ล้างข้อมูลเดือนนี้</button>
         </div>
       </div>
     </section>
@@ -967,6 +969,54 @@ function clearMonthData(){
 }
 
 /* ===== Export ===== */
+function exportSavingsCSV(){
+  const mk=viewMonthKey();
+  const t=loadTargetsForMonth(mk);
+  const b=loadBillsForMonth(mk);
+  const daily=loadDaily();
+  const pays=loadPaymentsForMonth(mk);
+  const dates=getPeriodDates(viewYear,viewMonth,b.dueDay||0);
+  const dailyTarget=b.daily||(t.chicken+t.acai)||0;
+  const viewDate=new Date(viewYear,viewMonth,1);
+  const monthName=viewDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+  const first=dates[0].toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  const last=dates[dates.length-1].toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  const payLabels={electric:'ค่าไฟ',water:'ค่าน้ำ',netAis:'เน็ต AIS',net3bb:'เน็ต 3BB',common:'ค่าส่วนกลาง'};
+  const payAmts={electric:b.electric||0,water:b.water||0,netAis:b.netAis||0,net3bb:b.net3bb||0,common:b.common||0};
+
+  let lines=[];
+  lines.push(`"Chick'n Bro — รายงานเก็บเงิน ${monthName}"`);
+  lines.push(`"รอบบิล: ${first} - ${last} (${dates.length} วัน)","เป้าเก็บ/วัน: ${dailyTarget}"`);
+  lines.push('');
+  lines.push('"--- บิลประจำเดือน ---"');
+  lines.push('"รายการ","ยอด","สถานะจ่าย"');
+  Object.keys(payLabels).forEach(k=>{
+    const p=pays[k];
+    const st=p?'จ่ายแล้ว '+new Date(p.ts).toLocaleDateString('th-TH'):'ยังไม่จ่าย';
+    lines.push(`"${payLabels[k]}","${payAmts[k]||0}","${st}"`);
+  });
+  lines.push(`"รวมบิล","${b.total||0}",""`);
+  lines.push('');
+  lines.push('"--- เก็บเงินรายวัน ---"');
+  lines.push('"วันที่","ร้านไก่","ร้านอาซาอิ","รวม","เป้า/วัน","สถานะ"');
+  let totalSaved=0;
+  dates.forEach(dt=>{
+    const key=dateKeyOf(dt);
+    const e=daily[key]||{chicken:0,acai:0};
+    const dayTotal=(e.chicken||0)+(e.acai||0);
+    totalSaved+=dayTotal;
+    const diff=dayTotal-dailyTarget;
+    lines.push(`"${dt.toLocaleDateString('th-TH')}","${e.chicken||0}","${e.acai||0}","${dayTotal}","${dailyTarget}","${diff}"`);
+  });
+  const totalTarget=dailyTarget*dates.length;
+  lines.push('');
+  lines.push(`"สรุป","เก็บแล้ว: ${totalSaved}","เป้าหมาย: ${totalTarget}","ส่วนต่าง: ${totalSaved-totalTarget}"`);
+
+  const csv='\uFEFF'+lines.join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=`chicknbro_save_${mk}.csv`;a.click();URL.revokeObjectURL(a.href);
+  toast('ดาวน์โหลด CSV แล้ว ✅');
+}
 function exportCSV(){
   let logs=filterLogs();if(!logs.length){toast('ไม่มีข้อมูล');return}
   const head=['วันที่-เวลา','ยอดเข้า','หัก (%)','เงินฉัน','โอนแม่','หมายเหตุ'];
@@ -983,10 +1033,6 @@ function exportPDF(){
   const b=loadBillsForMonth(mk);
   const daily=loadDaily();
   const pays=loadPaymentsForMonth(mk);
-  if(!logs.length&&!b.total){toast('ไม่มีข้อมูล');return}
-  let tin=0,tme=0,tmom=0;
-  logs.forEach(l=>{tin+=l.amount;tme+=l.me;tmom+=l.mom});
-  const net=tin-tme-tmom;
 
   /* --- ข้อมูลเก็บเงินรายวัน --- */
   const dates=getPeriodDates(viewYear,viewMonth,b.dueDay||0);
@@ -999,6 +1045,11 @@ function exportPDF(){
   dates.forEach(dt=>{const e=daily[dateKeyOf(dt)]||{chicken:0,acai:0};totalSaved+=(e.chicken||0)+(e.acai||0)});
   const totalTarget=dailyTarget*dates.length;
   const svDiff=totalSaved-totalTarget;
+  const hasBillData=b.total||t.chicken||t.acai||dates.some(dt=>daily[dateKeyOf(dt)]);
+  if(!logs.length&&!hasBillData){toast('ไม่มีข้อมูล');return}
+  let tin=0,tme=0,tmom=0;
+  logs.forEach(l=>{tin+=l.amount;tme+=l.me;tmom+=l.mom});
+  const net=tin-tme-tmom;
 
   const billItems=[
     {k:'electric',label:'⚡ ค่าไฟ',amt:b.electric||0},
@@ -1008,7 +1059,7 @@ function exportPDF(){
     {k:'common',label:'🏢 ค่าส่วนกลาง',amt:b.common||0}
   ];
 
-  const billSection=b.total?`
+  const billSection=hasBillData?`
     <div style="font-size:16px;font-weight:900;color:#E65100;margin:24px 0 10px;border-bottom:2px solid #FFB300;padding-bottom:6px">🧾 บิล &amp; การเก็บเงิน — ${monthName}</div>
     <div style="font-size:11px;color:#888;margin-bottom:10px">รอบบิล: ${first} - ${last} (${dates.length} วัน) • เป้าเก็บวันละ ${fmt(dailyTarget)} บาท</div>
     <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">
