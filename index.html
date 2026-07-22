@@ -391,10 +391,17 @@ hr.sep{border:none;border-top:1px dashed var(--line);margin:14px 0}
         <div class="billgrid">
           <div class="field"><label>ค่าไฟ</label><input type="number" id="billElectric" inputmode="decimal" placeholder="0"></div>
           <div class="field"><label>ค่าน้ำ</label><input type="number" id="billWater" inputmode="decimal" placeholder="0"></div>
-          <div class="field full"><label>ค่าส่วนกลาง / อื่นๆ</label><input type="number" id="billCommon" inputmode="decimal" placeholder="0"></div>
+          <div class="field"><label>ค่าส่วนกลาง / อื่นๆ</label><input type="number" id="billCommon" inputmode="decimal" placeholder="0"></div>
+          <div class="field"><label>📆 จ่ายบิลวันที่</label><input type="number" id="billDueDay" inputmode="numeric" min="1" max="31" placeholder="เช่น 20"></div>
         </div>
+        <p class="small muted" style="margin-top:-6px;margin-bottom:10px">ใส่วันที่จ่ายบิล (เช่น 20) → รอบเก็บเงินจะเป็น 20 เดือนก่อน ถึง 20 เดือนนี้ • เว้นว่าง = ใช้ทั้งเดือนปฏิทิน</p>
         <button class="btn green" onclick="saveBills()">💾 บันทึกบิล</button>
         <div class="billresult" id="billResult" style="display:none;margin-top:14px"></div>
+      </div>
+
+      <div class="section">
+        <h2><span class="num">✅</span>เช็คอินจ่ายบิล</h2>
+        <div id="payList"></div>
       </div>
 
       <div class="section">
@@ -653,7 +660,7 @@ function saveEdit(){
 function deleteEdit(){if(editingId&&confirm('ลบรายการนี้?')){save(load().filter(l=>l.id!==editingId));closeSheet();renderLog();renderHome();toast('ลบแล้ว')}}
 
 /* ===== Bills & Savings ===== */
-const BKEY='cb_bills_v3', TKEY='cb_targets_v3', DKEY='cb_daily_v2';
+const BKEY='cb_bills_v3', TKEY='cb_targets_v3', DKEY='cb_daily_v2', PKEY='cb_payments_v1';
 let viewYear=new Date().getFullYear(), viewMonth=new Date().getMonth();
 let viewBillYear=new Date().getFullYear(), viewBillMonth=new Date().getMonth();
 
@@ -673,8 +680,30 @@ function saveTargetsStore(t){const all=loadTargetsAll();all[billMonthKey()]=t;sa
 function loadTargetsForMonth(mk){const all=loadTargetsAll();return all[mk]||{chicken:0,acai:0}}
 function loadBillsForMonth(mk){const all=loadBillsAll();return all[mk]||{}}
 
+function loadPaymentsAll(){try{return JSON.parse(localStorage.getItem(PKEY))||{}}catch(e){return{}}}
+function savePaymentsAll(p){localStorage.setItem(PKEY,JSON.stringify(p))}
+function loadPayments(){const all=loadPaymentsAll();return all[billMonthKey()]||{}}
+
 function loadDaily(){try{return JSON.parse(localStorage.getItem(DKEY))||{}}catch(e){return{}}}
 function saveDailyStore(d){localStorage.setItem(DKEY,JSON.stringify(d))}
+
+/* คำนวณวันทั้งหมดในรอบบิล (รองรับค่อมเดือน) */
+function getPeriodDates(year,month,dueDay){
+  const dates=[];
+  if(!dueDay){
+    const dim=new Date(year,month+1,0).getDate();
+    for(let d=1;d<=dim;d++)dates.push(new Date(year,month,d));
+    return dates;
+  }
+  const pm=month===0?11:month-1, py=month===0?year-1:year;
+  const clampD=(y,m,d)=>Math.min(d,new Date(y,m+1,0).getDate());
+  const start=new Date(py,pm,clampD(py,pm,dueDay)+1);
+  const end=new Date(year,month,clampD(year,month,dueDay));
+  let cur=new Date(start);
+  while(cur<=end){dates.push(new Date(cur));cur.setDate(cur.getDate()+1)}
+  return dates;
+}
+function dateKeyOf(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}
 
 function changeBillMonth(delta){
   viewBillMonth+=delta;
@@ -691,32 +720,67 @@ function loadBillsForm(){
   document.getElementById('billElectric').value=b.electric||'';
   document.getElementById('billWater').value=b.water||'';
   document.getElementById('billCommon').value=b.common||'';
+  document.getElementById('billDueDay').value=b.dueDay||'';
   const t=loadTargets();
   document.getElementById('targetChicken').value=t.chicken||'';
   document.getElementById('targetAcai').value=t.acai||'';
   renderBillsResult();
   renderTargetSummary();
+  renderPayments();
 }
 function renderBillsResult(){
   const b=loadBills();
   const div=document.getElementById('billResult');
   if(!b.total){div.style.display='none';return}
-  const daysInMonth=new Date(viewBillYear,viewBillMonth+1,0).getDate();
+  const dates=getPeriodDates(viewBillYear,viewBillMonth,b.dueDay||0);
+  const daily=b.total/dates.length;
+  const first=dates[0].toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  const last=dates[dates.length-1].toLocaleDateString('th-TH',{day:'numeric',month:'short'});
   div.style.display='block';
-  div.innerHTML=`<div class="sub">รวมบิลเดือนนี้</div><div class="big">${baht(b.total)}</div><div class="sub">÷ ${daysInMonth} วัน = เก็บวันละ <b>${baht(b.total/daysInMonth)}</b></div>`;
+  div.innerHTML=`<div class="sub">รวมบิลรอบนี้</div><div class="big">${baht(b.total)}</div><div class="sub">รอบบิล ${first} - ${last} (${dates.length} วัน)</div><div class="sub">÷ ${dates.length} วัน = เก็บวันละ <b>${baht(daily)}</b></div>`;
 }
 function saveBills(){
   const electric=parseFloat(document.getElementById('billElectric').value)||0;
   const water=parseFloat(document.getElementById('billWater').value)||0;
   const common=parseFloat(document.getElementById('billCommon').value)||0;
+  const dueDay=parseInt(document.getElementById('billDueDay').value)||0;
   const total=electric+water+common;
-  const daysInMonth=new Date(viewBillYear,viewBillMonth+1,0).getDate();
-  const daily=total/daysInMonth;
-  saveBillsStore({electric,water,common,total,daily,daysInMonth});
+  const dates=getPeriodDates(viewBillYear,viewBillMonth,dueDay);
+  const daily=total/dates.length;
+  saveBillsStore({electric,water,common,total,daily,dueDay,daysInPeriod:dates.length});
   viewYear=viewBillYear;viewMonth=viewBillMonth;
   renderBillsResult();
+  renderPayments();
   renderSavings();
   toast('บันทึกบิลแล้ว ✅');
+}
+/* ===== เช็คอินจ่ายบิล ===== */
+function togglePaid(type){
+  const all=loadPaymentsAll();const mk=billMonthKey();
+  if(!all[mk])all[mk]={};
+  if(all[mk][type]){delete all[mk][type]}
+  else{all[mk][type]={ts:Date.now()}}
+  savePaymentsAll(all);renderPayments();
+  toast(all[mk][type]?'เช็คอินจ่ายแล้ว ✅':'ยกเลิกแล้ว');
+}
+function renderPayments(){
+  const b=loadBills();const pays=loadPayments();
+  const items=[
+    {k:'electric',label:'⚡ ค่าไฟ',amt:b.electric},
+    {k:'water',label:'💧 ค่าน้ำ',amt:b.water},
+    {k:'common',label:'🏢 ค่าส่วนกลาง',amt:b.common}
+  ].filter(x=>x.amt>0);
+  const div=document.getElementById('payList');
+  if(!items.length){div.innerHTML='<div class="empty">บันทึกบิลด้านบนก่อนเพื่อเช็คอิน</div>';return}
+  div.innerHTML=items.map(x=>{
+    const p=pays[x.k];
+    if(p){
+      const d=new Date(p.ts);
+      const ds=d.toLocaleDateString('th-TH',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+      return `<div class="rec"><div><div class="lbl">${x.label} ${baht(x.amt)}</div><div class="meta" style="color:var(--green);font-weight:700">✅ จ่ายแล้ว ${ds}</div></div><button class="btn ghost sm" style="width:auto;padding:6px 10px" onclick="togglePaid('${x.k}')">ยกเลิก</button></div>`;
+    }
+    return `<div class="rec"><div><div class="lbl">${x.label} ${baht(x.amt)}</div><div class="meta">ยังไม่จ่าย</div></div><button class="btn green sm" style="width:auto;padding:6px 10px" onclick="togglePaid('${x.k}')">เช็คอินจ่ายแล้ว</button></div>`;
+  }).join('');
 }
 function renderTargetSummary(){
   const t=loadTargets();
@@ -746,32 +810,33 @@ function renderSavings(){
   const t=loadTargetsForMonth(mk);
   const b=loadBillsForMonth(mk);
   const daily=loadDaily();
-  const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
-  const now=new Date();
-  const isCurrentMonth=viewYear===now.getFullYear()&&viewMonth===now.getMonth();
-  const today=isCurrentMonth?now.getDate():-1;
+  const dates=getPeriodDates(viewYear,viewMonth,b.dueDay||0);
   const viewDate=new Date(viewYear,viewMonth,1);
   document.getElementById('saveMonthLabel').textContent=viewDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
 
   const dailyTarget=b.daily||(t.chicken+t.acai)||0;
-  document.getElementById('svDailyInfo').textContent=dailyTarget?`เป้าเก็บวันละ ${baht(dailyTarget)} (ไก่ ${baht(t.chicken)} + อาซาอิ ${baht(t.acai)})`:'ยังไม่ได้ตั้งบิลหรือยอดต่อร้าน';
+  const first=dates[0].toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  const last=dates[dates.length-1].toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  document.getElementById('svDailyInfo').textContent=dailyTarget?`เป้าเก็บวันละ ${baht(dailyTarget)} • รอบบิล ${first} - ${last} (${dates.length} วัน)`:'ยังไม่ได้ตั้งบิลหรือยอดต่อร้าน';
 
+  const todayStr=todayISO();
   let rows='';
-  for(let d=1;d<=daysInMonth;d++){
-    const key=`${mk}-${String(d).padStart(2,'0')}`;
+  dates.forEach(dt=>{
+    const key=dateKeyOf(dt);
     const entry=daily[key]||{chicken:0,acai:0};
-    const isToday=d===today;
-    const isPast=isCurrentMonth&&d<today;
+    const isToday=key===todayStr;
+    const isPast=key<todayStr;
     const cls=isToday?'today':isPast?'past':'';
-    rows+=`<tr class="${cls}" data-day="${d}" data-key="${key}">
-      <td style="font-weight:700">${d}${isToday?' <span class="pill" style="font-size:9px">วันนี้</span>':''}</td>
+    const dateLabel=dt.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+    rows+=`<tr class="${cls}" data-key="${key}">
+      <td style="font-weight:700;white-space:nowrap">${dateLabel}${isToday?' <span class="pill" style="font-size:9px">วันนี้</span>':''}</td>
       <td><input type="number" inputmode="decimal" value="${entry.chicken||''}" onblur="updateDay('${key}','chicken',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="0"></td>
       <td><input type="number" inputmode="decimal" value="${entry.acai||''}" onblur="updateDay('${key}','acai',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="0"></td>
       <td class="day-total" style="font-weight:700">${baht((entry.chicken||0)+(entry.acai||0))}</td>
       <td class="day-cumtarget"></td>
       <td class="day-status"></td>
     </tr>`;
-  }
+  });
   document.getElementById('daysBody').innerHTML=rows;
   updateSavingsSummary();
 }
@@ -780,16 +845,14 @@ function updateSavingsSummary(){
   const t=loadTargetsForMonth(mk);
   const b=loadBillsForMonth(mk);
   const daily=loadDaily();
-  const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
   const dailyTarget=b.daily||(t.chicken+t.acai)||0;
-  let totalSaved=0, cumSaved=0;
+  let totalSaved=0;
   const rows=document.querySelectorAll('#daysBody tr');
+  const numDays=rows.length;
   rows.forEach(row=>{
-    const d=parseInt(row.dataset.day);
     const key=row.dataset.key;
     const entry=daily[key]||{chicken:0,acai:0};
     const dayTotal=(entry.chicken||0)+(entry.acai||0);
-    cumSaved+=dayTotal;
     totalSaved+=dayTotal;
     const diff=dayTotal-dailyTarget;
     const statusCls=diff>=0?'status-ok':'status-bad';
@@ -801,7 +864,7 @@ function updateSavingsSummary(){
     if(statusCell){statusCell.textContent=statusText;statusCell.className='day-status '+statusCls}
     if(totalCell)totalCell.textContent=baht(dayTotal);
   });
-  const totalTarget=dailyTarget*daysInMonth;
+  const totalTarget=dailyTarget*numDays;
   document.getElementById('svSaved').textContent=baht(totalSaved);
   document.getElementById('svTarget').textContent=baht(totalTarget);
   const diff=totalSaved-totalTarget;
@@ -822,13 +885,14 @@ function updateDay(key,shop,value){
 }
 function clearMonthData(){
   const mk=viewMonthKey();
+  const b=loadBillsForMonth(mk);
   const viewDate=new Date(viewYear,viewMonth,1);
   const monthName=viewDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
   if(!confirm(`ต้องการล้างข้อมูลการเก็บเงินเดือน ${monthName} ทั้งหมด?`))return;
   if(!confirm(`ยืนยันอีกครั้ง: ล้างข้อมูลเดือน ${monthName} จริงหรือไม่? (ไม่สามารถกู้คืนได้)`))return;
+  const dates=getPeriodDates(viewYear,viewMonth,b.dueDay||0);
   const daily=loadDaily();
-  const keysToDelete=Object.keys(daily).filter(k=>k.startsWith(mk));
-  keysToDelete.forEach(k=>delete daily[k]);
+  dates.forEach(dt=>{delete daily[dateKeyOf(dt)]});
   saveDailyStore(daily);
   renderSavings();
   toast('ล้างข้อมูลเดือนนี้แล้ว ✅');
