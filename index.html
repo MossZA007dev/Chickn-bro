@@ -394,6 +394,8 @@ tr.paid-day td:first-child{border-left:4px solid var(--green)}
         <div class="billgrid">
           <div class="field"><label>ค่าไฟ</label><input type="number" id="billElectric" inputmode="decimal" placeholder="0"></div>
           <div class="field"><label>ค่าน้ำ</label><input type="number" id="billWater" inputmode="decimal" placeholder="0"></div>
+          <div class="field"><label>📶 เน็ต AIS</label><input type="number" id="billNetAis" inputmode="decimal" placeholder="0"></div>
+          <div class="field"><label>📶 เน็ต 3BB</label><input type="number" id="billNet3bb" inputmode="decimal" placeholder="0"></div>
           <div class="field"><label>ค่าส่วนกลาง / อื่นๆ</label><input type="number" id="billCommon" inputmode="decimal" placeholder="0"></div>
           <div class="field"><label>📆 จ่ายบิลวันที่</label><input type="number" id="billDueDay" inputmode="numeric" min="1" max="31" placeholder="เช่น 20"></div>
         </div>
@@ -723,6 +725,8 @@ function loadBillsForm(){
   const b=loadBills();
   document.getElementById('billElectric').value=b.electric||'';
   document.getElementById('billWater').value=b.water||'';
+  document.getElementById('billNetAis').value=b.netAis||'';
+  document.getElementById('billNet3bb').value=b.net3bb||'';
   document.getElementById('billCommon').value=b.common||'';
   document.getElementById('billDueDay').value=b.dueDay||'';
   const t=loadTargets();
@@ -746,12 +750,14 @@ function renderBillsResult(){
 function saveBills(){
   const electric=parseFloat(document.getElementById('billElectric').value)||0;
   const water=parseFloat(document.getElementById('billWater').value)||0;
+  const netAis=parseFloat(document.getElementById('billNetAis').value)||0;
+  const net3bb=parseFloat(document.getElementById('billNet3bb').value)||0;
   const common=parseFloat(document.getElementById('billCommon').value)||0;
   const dueDay=parseInt(document.getElementById('billDueDay').value)||0;
-  const total=electric+water+common;
+  const total=electric+water+netAis+net3bb+common;
   const dates=getPeriodDates(viewBillYear,viewBillMonth,dueDay);
   const daily=total/dates.length;
-  saveBillsStore({electric,water,common,total,daily,dueDay,daysInPeriod:dates.length});
+  saveBillsStore({electric,water,netAis,net3bb,common,total,daily,dueDay,daysInPeriod:dates.length});
   viewYear=viewBillYear;viewMonth=viewBillMonth;
   renderBillsResult();
   renderPayments();
@@ -789,6 +795,8 @@ function renderPayments(){
   const items=[
     {k:'electric',label:'⚡ ค่าไฟ',amt:b.electric||0},
     {k:'water',label:'💧 ค่าน้ำ',amt:b.water||0},
+    {k:'netAis',label:'📶 เน็ต AIS',amt:b.netAis||0},
+    {k:'net3bb',label:'📶 เน็ต 3BB',amt:b.net3bb||0},
     {k:'common',label:'🏢 ค่าส่วนกลาง',amt:b.common||0}
   ];
   const div=document.getElementById('payList');
@@ -859,7 +867,7 @@ function renderSavings(){
   const b=loadBillsForMonth(mk);
   const daily=loadDaily();
   const pays=loadPaymentsAll();
-  const payLabels={electric:'⚡ค่าไฟ',water:'💧ค่าน้ำ',common:'🏢ส่วนกลาง'};
+  const payLabels={electric:'⚡ค่าไฟ',water:'💧ค่าน้ำ',netAis:'📶AIS',net3bb:'📶3BB',common:'🏢ส่วนกลาง'};
   const payMap={};
   Object.values(pays).forEach(monthPays=>{
     Object.keys(monthPays).forEach(type=>{
