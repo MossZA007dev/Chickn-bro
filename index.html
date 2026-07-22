@@ -977,10 +977,85 @@ function exportCSV(){
   toast('ดาวน์โหลด Excel แล้ว');
 }
 function exportPDF(){
-  let logs=filterLogs();if(!logs.length){toast('ไม่มีข้อมูล');return}
+  let logs=filterLogs();
+  const mk=viewMonthKey();
+  const t=loadTargetsForMonth(mk);
+  const b=loadBillsForMonth(mk);
+  const daily=loadDaily();
+  const pays=loadPaymentsForMonth(mk);
+  if(!logs.length&&!b.total){toast('ไม่มีข้อมูล');return}
   let tin=0,tme=0,tmom=0;
   logs.forEach(l=>{tin+=l.amount;tme+=l.me;tmom+=l.mom});
   const net=tin-tme-tmom;
+
+  /* --- ข้อมูลเก็บเงินรายวัน --- */
+  const dates=getPeriodDates(viewYear,viewMonth,b.dueDay||0);
+  const dailyTarget=b.daily||(t.chicken+t.acai)||0;
+  const viewDate=new Date(viewYear,viewMonth,1);
+  const monthName=viewDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+  const first=dates[0].toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  const last=dates[dates.length-1].toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+  let totalSaved=0;
+  dates.forEach(dt=>{const e=daily[dateKeyOf(dt)]||{chicken:0,acai:0};totalSaved+=(e.chicken||0)+(e.acai||0)});
+  const totalTarget=dailyTarget*dates.length;
+  const svDiff=totalSaved-totalTarget;
+
+  const billItems=[
+    {k:'electric',label:'⚡ ค่าไฟ',amt:b.electric||0},
+    {k:'water',label:'💧 ค่าน้ำ',amt:b.water||0},
+    {k:'netAis',label:'📶 เน็ต AIS',amt:b.netAis||0},
+    {k:'net3bb',label:'📶 เน็ต 3BB',amt:b.net3bb||0},
+    {k:'common',label:'🏢 ค่าส่วนกลาง',amt:b.common||0}
+  ];
+
+  const billSection=b.total?`
+    <div style="font-size:16px;font-weight:900;color:#E65100;margin:24px 0 10px;border-bottom:2px solid #FFB300;padding-bottom:6px">🧾 บิล &amp; การเก็บเงิน — ${monthName}</div>
+    <div style="font-size:11px;color:#888;margin-bottom:10px">รอบบิล: ${first} - ${last} (${dates.length} วัน) • เป้าเก็บวันละ ${fmt(dailyTarget)} บาท</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px">
+      <thead><tr style="background:#FFF3E0">
+        <th style="padding:7px 10px;text-align:left;border:1px solid #F0E4D3">รายการ</th>
+        <th style="padding:7px 10px;text-align:right;border:1px solid #F0E4D3">ยอด(บาท)</th>
+        <th style="padding:7px 10px;text-align:center;border:1px solid #F0E4D3">สถานะจ่าย</th>
+      </tr></thead>
+      <tbody>
+        ${billItems.map(x=>{
+          const p=pays[x.k];
+          const st=p?`<span style="color:#43A047;font-weight:700">✅ จ่ายแล้ว ${new Date(p.ts).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})}</span>`:'<span style="color:#C62828">ยังไม่จ่าย</span>';
+          return `<tr><td style="padding:6px 10px;border:1px solid #F0E4D3">${x.label}</td><td style="padding:6px 10px;border:1px solid #F0E4D3;text-align:right">${x.amt?fmt(x.amt):'-'}</td><td style="padding:6px 10px;border:1px solid #F0E4D3;text-align:center">${st}</td></tr>`;
+        }).join('')}
+        <tr style="background:#FFF9F0;font-weight:900"><td style="padding:7px 10px;border:1px solid #F0E4D3">รวมทั้งหมด</td><td style="padding:7px 10px;border:1px solid #F0E4D3;text-align:right">${fmt(b.total)}</td><td style="padding:7px 10px;border:1px solid #F0E4D3"></td></tr>
+      </tbody>
+    </table>
+    <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:12px">
+      <thead><tr style="background:#FFB300;color:#fff">
+        <th style="padding:6px;text-align:left;border:1px solid #FFB300">วันที่</th>
+        <th style="padding:6px;text-align:right;border:1px solid #FFB300">ร้านไก่</th>
+        <th style="padding:6px;text-align:right;border:1px solid #FFB300">อาซาอิ</th>
+        <th style="padding:6px;text-align:right;border:1px solid #FFB300">รวม</th>
+        <th style="padding:6px;text-align:right;border:1px solid #FFB300">สถานะ</th>
+      </tr></thead>
+      <tbody>
+        ${dates.map((dt,i)=>{
+          const key=dateKeyOf(dt);
+          const e=daily[key]||{chicken:0,acai:0};
+          const dayTotal=(e.chicken||0)+(e.acai||0);
+          const diff=dayTotal-dailyTarget;
+          const dLabel=dt.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+          return `<tr style="background:${i%2===0?'#fff':'#FFF9F0'}">
+            <td style="padding:4px 8px;border:1px solid #F0E4D3">${dLabel}</td>
+            <td style="padding:4px 8px;border:1px solid #F0E4D3;text-align:right">${e.chicken?fmt(e.chicken):'-'}</td>
+            <td style="padding:4px 8px;border:1px solid #F0E4D3;text-align:right">${e.acai?fmt(e.acai):'-'}</td>
+            <td style="padding:4px 8px;border:1px solid #F0E4D3;text-align:right;font-weight:700">${dayTotal?fmt(dayTotal):'-'}</td>
+            <td style="padding:4px 8px;border:1px solid #F0E4D3;text-align:right;color:${diff>=0?'#43A047':'#C62828'};font-weight:700">${diff>=0?'+':''}${fmt(diff)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    <div style="text-align:center;background:${svDiff>=0?'#E8F5E9':'#FFEBEE'};color:${svDiff>=0?'#2E7D32':'#C62828'};padding:12px;border-radius:10px;font-weight:900;font-size:14px;margin-bottom:10px">
+      เก็บแล้ว ฿${fmt(totalSaved)} / เป้าหมาย ฿${fmt(totalTarget)} — ${svDiff>=0?'✅ เกิน ฿'+fmt(svDiff):'❌ ขาด ฿'+fmt(Math.abs(svDiff))}
+    </div>
+  `:'';
+
   const div=document.createElement('div');
   div.style.cssText='position:fixed;left:-9999px;top:0;width:700px;font-family:Prompt,sans-serif;background:#fff;padding:40px;';
   div.innerHTML=`
@@ -989,6 +1064,9 @@ function exportPDF(){
       <div style="font-size:13px;color:#888;margin-top:4px">ไก่ทอดเพื่อนซี้ กินเมื่อไหร่ก็ฟิน</div>
       <div style="font-size:11px;color:#aaa;margin-top:4px">พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}</div>
     </div>
+    ${billSection}
+    ${logs.length?`
+    <div style="font-size:16px;font-weight:900;color:#E65100;margin:24px 0 10px;border-bottom:2px solid #FFB300;padding-bottom:6px">💸 ประวัติเงินเข้า-ออก</div>
     <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px">
       <thead>
         <tr style="background:#FFB300;color:#fff">
@@ -1025,8 +1103,8 @@ function exportPDF(){
     </div>
     <div style="text-align:center;background:linear-gradient(135deg,#FFCC80,#FF9800);color:#fff;padding:16px;border-radius:12px;font-weight:900;font-size:18px">
       🐔 คงเหลือในกล่องร้าน: ฿${fmt(net)}
-    </div>
-    <div style="text-align:center;margin-top:16px;font-size:10px;color:#bbb">Chick'n Bro — ระบบจัดการเงินร้าน •ไก่ทอดเพื่อนซี้ กินเมื่อไหร่ก็ฟิน</div>
+    </div>`:''}
+    <div style="text-align:center;margin-top:16px;font-size:10px;color:#bbb">Chick'n Bro — ระบบจัดการเงินร้าน • ไก่ทอดเพื่อนซี้ กินเมื่อไหร่ก็ฟิน</div>
   `;
   document.body.appendChild(div);
   html2canvas(div,{scale:2,useCORS:true,backgroundColor:'#fff'}).then(canvas=>{
