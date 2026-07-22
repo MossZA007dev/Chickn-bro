@@ -858,13 +858,15 @@ function renderSavings(){
   const t=loadTargetsForMonth(mk);
   const b=loadBillsForMonth(mk);
   const daily=loadDaily();
-  const pays=loadPaymentsForMonth(mk);
+  const pays=loadPaymentsAll();
   const payLabels={electric:'⚡ค่าไฟ',water:'💧ค่าน้ำ',common:'🏢ส่วนกลาง'};
   const payMap={};
-  Object.keys(pays).forEach(type=>{
-    const dk=isoOf(pays[type].ts);
-    if(!payMap[dk])payMap[dk]=[];
-    payMap[dk].push(payLabels[type]);
+  Object.values(pays).forEach(monthPays=>{
+    Object.keys(monthPays).forEach(type=>{
+      const dk=isoOf(monthPays[type].ts);
+      if(!payMap[dk])payMap[dk]=[];
+      payMap[dk].push(payLabels[type]);
+    });
   });
   const dates=getPeriodDates(viewYear,viewMonth,b.dueDay||0);
   const viewDate=new Date(viewYear,viewMonth,1);
