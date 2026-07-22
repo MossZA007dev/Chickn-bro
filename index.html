@@ -227,6 +227,9 @@ hr.sep{border:none;border-top:1px dashed var(--line);margin:14px 0}
 .dayscroll tr.past{background:#FAFAFA}
 .status-ok{color:var(--green);font-weight:800}
 .status-bad{color:var(--red);font-weight:800}
+tr.paid-day{background:#E8F5E9}
+tr.paid-day td:first-child{border-left:4px solid var(--green)}
+.paybadge{display:inline-block;background:var(--green-bg);color:var(--green);border:1px solid #A5D6A7;border-radius:999px;font-size:9px;font-weight:700;padding:1px 6px;margin-top:2px}
 .summarybar{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}
 .summarybar .b{background:var(--cream2);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
 .summarybar .b .t{font-size:10px;color:var(--muted);font-weight:600}
@@ -683,6 +686,7 @@ function loadBillsForMonth(mk){const all=loadBillsAll();return all[mk]||{}}
 function loadPaymentsAll(){try{return JSON.parse(localStorage.getItem(PKEY))||{}}catch(e){return{}}}
 function savePaymentsAll(p){localStorage.setItem(PKEY,JSON.stringify(p))}
 function loadPayments(){const all=loadPaymentsAll();return all[billMonthKey()]||{}}
+function loadPaymentsForMonth(mk){const all=loadPaymentsAll();return all[mk]||{}}
 
 function loadDaily(){try{return JSON.parse(localStorage.getItem(DKEY))||{}}catch(e){return{}}}
 function saveDailyStore(d){localStorage.setItem(DKEY,JSON.stringify(d))}
@@ -759,7 +763,7 @@ function togglePaid(type){
   const all=loadPaymentsAll();const mk=billMonthKey();
   if(!all[mk])all[mk]={};
   delete all[mk][type];
-  savePaymentsAll(all);renderPayments();
+  savePaymentsAll(all);renderPayments();renderSavings();
   toast('ยกเลิกแล้ว');
 }
 function checkInPaid(type){
@@ -768,7 +772,7 @@ function checkInPaid(type){
   const all=loadPaymentsAll();const mk=billMonthKey();
   if(!all[mk])all[mk]={};
   all[mk][type]={ts};
-  savePaymentsAll(all);renderPayments();
+  savePaymentsAll(all);renderPayments();renderSavings();
   toast('เช็คอินจ่ายแล้ว ✅');
 }
 function savePaidDate(type){
@@ -777,7 +781,7 @@ function savePaidDate(type){
   const all=loadPaymentsAll();const mk=billMonthKey();
   if(!all[mk])all[mk]={};
   all[mk][type]={ts:new Date(dateVal+'T12:00:00').getTime()};
-  savePaymentsAll(all);renderPayments();
+  savePaymentsAll(all);renderPayments();renderSavings();
   toast('แก้ไขวันที่แล้ว ✅');
 }
 function renderPayments(){
@@ -854,6 +858,14 @@ function renderSavings(){
   const t=loadTargetsForMonth(mk);
   const b=loadBillsForMonth(mk);
   const daily=loadDaily();
+  const pays=loadPaymentsForMonth(mk);
+  const payLabels={electric:'⚡ค่าไฟ',water:'💧ค่าน้ำ',common:'🏢ส่วนกลาง'};
+  const payMap={};
+  Object.keys(pays).forEach(type=>{
+    const dk=isoOf(pays[type].ts);
+    if(!payMap[dk])payMap[dk]=[];
+    payMap[dk].push(payLabels[type]);
+  });
   const dates=getPeriodDates(viewYear,viewMonth,b.dueDay||0);
   const viewDate=new Date(viewYear,viewMonth,1);
   document.getElementById('saveMonthLabel').textContent=viewDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
@@ -870,10 +882,12 @@ function renderSavings(){
     const entry=daily[key]||{chicken:0,acai:0};
     const isToday=key===todayStr;
     const isPast=key<todayStr;
-    const cls=isToday?'today':isPast?'past':'';
+    const paid=payMap[key];
+    const cls=(isToday?'today':isPast?'past':'')+(paid?' paid-day':'');
     const dateLabel=dt.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+    const badges=paid?`<br>${paid.map(l=>`<span class="paybadge">✅${l}</span>`).join(' ')}`:'';
     rows+=`<tr class="${cls}" data-key="${key}">
-      <td style="font-weight:700;white-space:nowrap">${dateLabel}${isToday?' <span class="pill" style="font-size:9px">วันนี้</span>':''}</td>
+      <td style="font-weight:700;white-space:nowrap">${dateLabel}${isToday?' <span class="pill" style="font-size:9px">วันนี้</span>':''}${badges}</td>
       <td><input type="number" inputmode="decimal" value="${entry.chicken||''}" onblur="updateDay('${key}','chicken',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="0"></td>
       <td><input type="number" inputmode="decimal" value="${entry.acai||''}" onblur="updateDay('${key}','acai',this.value)" onkeydown="if(event.key==='Enter')this.blur()" placeholder="0"></td>
       <td class="day-total" style="font-weight:700">${baht((entry.chicken||0)+(entry.acai||0))}</td>
